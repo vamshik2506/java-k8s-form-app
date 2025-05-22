@@ -32,44 +32,55 @@ jobs:
             -Dsonar.host.url=$SONAR_HOST_URL \
             -Dsonar.login=$SONAR_TOKEN
 
-      # Step 4: Push artifact to Nexus
-      - name: Deploy to Nexus
-        env:
-          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
-          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
-          NEXUS_URL: ${{ secrets.NEXUS_URL }}
+      # Step 4: Set up Maven settings.xml for Nexus credentials
+      - name: Set up Maven settings.xml
         run: |
-          mvn deploy -DskipTests \
-            -DaltDeploymentRepository=nexus::default::$NEXUS_URL \
-            -Dnexus.username=$NEXUS_USERNAME \
-            -Dnexus.password=$NEXUS_PASSWORD
+          mkdir -p ~/.m2
+          echo '<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                                      http://maven.apache.org/xsd/settings-1.0.0.xsd">
+              <servers>
+                  <server>
+                      <id>nexus</id>
+                      <username>${{ secrets.NEXUS_USERNAME }}</username>
+                      <password>${{ secrets.NEXUS_PASSWORD }}</password>
+                  </server>
+              </servers>
+          </settings>' > ~/.m2/settings.xml
 
-      # Step 5: Build Docker image
+      # Step 5: Push artifact to Nexus
+      - name: Deploy to Nexus
+        run: |
+          mvn deploy -DskipTests
+
+      # Step 6: Build Docker image
       - name: Build Docker image
         run: |
           docker build -t my-app:latest .
 
-      # Step 6: Install Trivy and scan the image
+      # Step 7: Install Trivy and scan the image
       - name: Install Trivy
         run: |
           sudo apt-get update && sudo apt-get install -y wget
-          wget https://github.com/aquasecurity/trivy/releases/download/v0.51.1/trivy_0.51.1_Linux-64bit.deb
-          sudo dpkg -i trivy_0.51.1_Linux-64bit.deb
+          wget https://github.com/aquasecurity/trivy/releases/download/v0.52.2/trivy_0.52.2_Linux-64bit.deb
+          sudo dpkg -i trivy_0.52.2_Linux-64bit.deb
 
       - name: Scan image with Trivy
         run: |
           trivy image --exit-code 1 --severity HIGH,CRITICAL my-app:latest
 
-      # Step 7: Log in to AWS ECR
+      # Step 8: Log in to AWS ECR
       - name: Log in to AWS ECR
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
+          ECR_REPO_URL: ${{ secrets.ECR_REPO_URL }}
         run: |
           aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_URL
 
-      # Step 8: Tag and push image to ECR
+      # Step 9: Tag and push image to ECR
       - name: Tag and push image to ECR
         env:
           ECR_REPO_URL: ${{ secrets.ECR_REPO_URL }}
@@ -77,7 +88,7 @@ jobs:
           docker tag my-app:latest $ECR_REPO_URL:latest
           docker push $ECR_REPO_URL:latest
 
-      # Step 9: Deploy to Kubernetes via bastion host
+      # Step 10: Deploy to Kubernetes via bastion host
       - name: Deploy to Kubernetes
         env:
           BASTION_HOST: ${{ secrets.BASTION_HOST }}
