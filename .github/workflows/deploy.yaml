@@ -32,13 +32,12 @@ jobs:
             -Dsonar.host.url=$SONAR_HOST_URL \
             -Dsonar.login=$SONAR_TOKEN
 
-   
-      # Step 6: Build Docker image
+      # Step 4: Build Docker image
       - name: Build Docker image
         run: |
           docker build -t my-app:latest .
 
-      # Step 7: Install Trivy and scan the image
+      # Step 5: Install Trivy and scan the image
       - name: Install Trivy
         run: |
           sudo apt-get update && sudo apt-get install -y wget
@@ -49,7 +48,7 @@ jobs:
         run: |
           trivy image --exit-code 1 --severity HIGH,CRITICAL my-app:latest
 
-      # Step 8: Log in to AWS ECR
+      # Step 6: Log in to AWS ECR
       - name: Log in to AWS ECR
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -59,7 +58,7 @@ jobs:
         run: |
           aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_URL
 
-      # Step 9: Tag and push image to ECR
+      # Step 7: Tag and push image to ECR
       - name: Tag and push image to ECR
         env:
           ECR_REPO_URL: ${{ secrets.ECR_REPO_URL }}
@@ -67,7 +66,7 @@ jobs:
           docker tag my-app:latest $ECR_REPO_URL:latest
           docker push $ECR_REPO_URL:latest
 
-      # Step 10: Deploy to Kubernetes via bastion host
+      # Step 8: Deploy to Kubernetes via bastion host
       - name: Deploy to Kubernetes
         env:
           BASTION_HOST: ${{ secrets.BASTION_HOST }}
