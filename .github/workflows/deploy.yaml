@@ -79,7 +79,7 @@ jobs:
           chmod 600 private_key.pem
 
           # Update Kubernetes deployment with new image
-          ssh -i private_key.pem $BASTION_USER@$BASTION_HOST << 'EOF'
+          ssh -T -o StrictHostKeyChecking=no -i private_key.pem $BASTION_USER@$BASTION_HOST << 'EOF'
             kubectl set image deployment/my-app my-app=$ECR_REPO_URL:latest --namespace default
             kubectl rollout status deployment/my-app --namespace default
           EOF
