@@ -16,6 +16,8 @@ spec:
     spec:
       containers:
         - name: form-app
-          image: <your-docker-image>:latest  # Replace with actual image name
+          image: <containers:
+  - name: form-app
+    image: <ECR_REPO_URL>:latest  # Replace with actual image name
           ports:
             - containerPort: 8080
