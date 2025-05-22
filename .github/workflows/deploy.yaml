@@ -3,70 +3,48 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
-      - main  # Trigger the pipeline when changes are pushed to the 'main' branch
+      - main
+
+env:
+  AWS_REGION: eu-north-1
+  ECR_REPOSITORY: github/vamshi
+  IMAGE_TAG: latest
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the code
-      - name: Checkout code
-        uses: actions/checkout@v2
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      # Step 2: Build the project using Maven
-      - name: Build with Maven
-        run: mvn clean install -DskipTests
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
 
-      # Step 3: SonarQube Scan
-      - name: Run SonarQube analysis
-        uses: sonarsource/sonarcloud-github-action@v1
-        with:
-          sonar-token: ${{ secrets.SONAR_TOKEN }}  # Set the SonarQube token in GitHub Secrets
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
 
-      # Step 4: Push SonarQube analysis results to SonarQube EC2 instance
-      - name: Push analysis to SonarQube
-        run: |
-          curl -u ${{ secrets.SONAR_USER }}:${{ secrets.SONAR_PASSWORD }} \
-          -X POST -d "projectKey=java-k8s-form-app&projectName=java-k8s-form-app" \
-          "http://<sonarqube_ec2_ip>:9000/api/qualitygates/project_status?projectKey=java-k8s-form-app"
+    - name: Build Docker image
+      run: |
+        docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
+        docker tag $ECR_REPOSITORY:$IMAGE_TAG 971901834334.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
 
-      # Step 5: Push the artifact to Nexus Repository
-      - name: Deploy to Nexus Repository
-        run: |
-          curl -u ${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASSWORD }} \
-          -X POST --data-binary @target/formapp-1.0.0.jar \
-          "http://<nexus_repo_url>/repository/maven-releases/com/example/formapp/formapp-1.0.0.jar"
+    - name: Install Trivy
+      run: |
+        sudo apt-get update
+        sudo apt-get install wget -y
+        wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.1_Linux-64bit.deb
+        sudo dpkg -i trivy_0.50.1_Linux-64bit.deb
 
-      # Step 6: Create a Docker image
-      - name: Build Docker image
-        run: |
-          docker build -t formapp:latest .
+    - name: Scan Docker image with Trivy
+      run: |
+        trivy image --exit-code 1 --severity CRITICAL,HIGH 971901834334.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
 
-      # Step 7: Install Trivy and scan the Docker image
-      - name: Install Trivy
-        run: |
-          wget https://github.com/aquasecurity/trivy/releases/download/v0.29.2/trivy_0.29.2_Linux-64bit.deb
-          sudo dpkg -i trivy_0.29.2_Linux-64bit.deb
-          trivy --version
-
-      - name: Scan Docker image with Trivy
-        run: |
-          trivy image formapp:latest
-
-      # Step 8: Login to AWS ECR
-      - name: Login to AWS ECR
-        uses: aws-actions/amazon-ecr-login@v1
-
-      - name: Push Docker image to ECR
-        run: |
-          docker tag formapp:latest <aws_account_id>.dkr.ecr.<region>.amazonaws.com/formapp:latest
-          docker push <aws_account_id>.dkr.ecr.<region>.amazonaws.com/formapp:latest
-
-      # Step 9: Deploy Docker image to Kubernetes via Bastion host
-      - name: Deploy to Kubernetes
-        run: |
-          ssh -o StrictHostKeyChecking=no -i ${{ secrets.BASTION_KEY }} ec2-user@<bastion_host_ip> << EOF
-            kubectl apply -f /path/to/deployment.yaml
-            kubectl apply -f /path/to/service.yaml
-          EOF
+    - name: Push Docker image to ECR
+      run: |
+        docker push 971901834334.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
