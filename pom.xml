@@ -12,7 +12,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.2.5</version>
+        <version>3.4.5</version>
     </parent>
 
     <dependencies>
@@ -42,7 +42,7 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <version>3.2.5</version>
+                <version>3.4.5</version>
                 <configuration>
                     <mainClass>com.example.formapp.FormAppApplication</mainClass>
                 </configuration>
@@ -56,17 +56,4 @@
             </plugin>
         </plugins>
     </build>
-
-    <distributionManagement>
-        <repository>
-            <id>nexus</id>
-            <name>Nexus Releases</name>
-            <url>***</url>
-        </repository>
-        <snapshotRepository>
-            <id>nexus</id>
-            <name>Nexus Snapshots</name>
-            <url>***</url>
-        </snapshotRepository>
-    </distributionManagement>
 </project>
