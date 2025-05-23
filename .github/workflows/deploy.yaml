@@ -89,21 +89,23 @@ jobs:
 
           ssh -T -o StrictHostKeyChecking=no -i private_key.pem $BASTION_USER@$BASTION_HOST << 'EOF'
             echo "[INFO] Checking pre-deployment pod status..."
-            kubectl get pods -n default
+            kubectl get pods -n github/vamshi
+
 
             echo "[INFO] Describing problematic pods (if any)..."
-            kubectl describe pod -l app=my-app -n default || true
+            kubectl describe pod -l app=my-app -n github/vamshi || true
 
             echo "[INFO] Updating deployment image..."
-            kubectl set image deployment/my-app my-app=$ECR_REPO_URL:latest --namespace default
+            kubectl set image deployment/my-app my-app=$ECR_REPO_URL:latest --namespace github/vamshi
+
 
             echo "[INFO] Waiting for rollout status..."
-            kubectl rollout status deployment/my-app --namespace default --timeout=90s || true
+            kubectl rollout status deployment/my-app --namespace github/vamshi --timeout=90s || true
 
             echo "[INFO] Fetching logs from new pods..."
-            for pod in $(kubectl get pods -l app=my-app -o jsonpath='{.items[*].metadata.name}' -n default); do
+            for pod in $(kubectl get pods -l app=my-app -o jsonpath='{.items[*].metadata.name}' -n github/vamshi); do
               echo "[LOGS for \$pod]"
-              kubectl logs \$pod -n default || true
+              kubectl logs \$pod -n github/vamshi || true
             done
           EOF
 
