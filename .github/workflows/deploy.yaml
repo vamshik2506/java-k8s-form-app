@@ -78,31 +78,31 @@ jobs:
 
       # Step 9: Deploy to Kubernetes via bastion host
       - name: Deploy to Kubernetes
-        env:
-          BASTION_HOST: ${{ secrets.BASTION_HOST }}
-          BASTION_USER: ${{ secrets.BASTION_USER }}
-          SSH_PRIVATE_KEY: ${{ secrets.BASTION_KEY }}
-          ECR_REPO_URL: ${{ secrets.ECR_REPO_URL }}
-        run: |
-          echo "$SSH_PRIVATE_KEY" > private_key.pem
-          chmod 600 private_key.pem
+  env:
+    BASTION_HOST: ${{ secrets.BASTION_HOST }}
+    BASTION_USER: ${{ secrets.BASTION_USER }}
+    SSH_PRIVATE_KEY: ${{ secrets.BASTION_KEY }}
+    ECR_REPO_URL: ${{ secrets.ECR_REPO_URL }}
+  run: |
+    echo "$SSH_PRIVATE_KEY" > private_key.pem
+    chmod 600 private_key.pem
+    ssh -T -o StrictHostKeyChecking=no -i private_key.pem $BASTION_USER@$BASTION_HOST << 'EOF'
+      echo "[INFO] Checking pre-deployment pod status..."
+      kubectl get pods -n default
+      echo "[INFO] Describing problematic pods..."
+      kubectl describe pod -l app=my-app -n default || true
 
-          ssh -i private_key.pem \
-              -o StrictHostKeyChecking=no \
-              -o ServerAliveInterval=30 -o ServerAliveCountMax=5 \
-              $BASTION_USER@$BASTION_HOST << EOF
-            set -e
-            echo "[INFO] Pre-deployment check:"
-            kubectl get pods -n default
+      echo "[INFO] Updating image..."
+      kubectl set image deployment/my-app my-app=$ECR_REPO_URL:latest --namespace default
 
-            echo "[INFO] Updating image..."
-            kubectl set image deployment/my-app my-app=$ECR_REPO_URL:latest -n default
+      echo "[INFO] Waiting for rollout..."
+      kubectl rollout status deployment/my-app --namespace default --timeout=90s || true
 
-            echo "[INFO] Waiting for rollout to complete..."
-            kubectl rollout status deployment/my-app -n default --timeout=120s
+      echo "[INFO] Getting logs from pods..."
+      for pod in $(kubectl get pods -l app=my-app -o jsonpath='{.items[*].metadata.name}' -n default); do
+        echo "[LOGS for \$pod]"
+        kubectl logs \$pod -n default || true
+      done
+    EOF
+    rm private_key.pem
 
-            echo "[INFO] Post-deployment check:"
-            kubectl get pods -n default
-          EOF
-
-          rm private_key.pem
