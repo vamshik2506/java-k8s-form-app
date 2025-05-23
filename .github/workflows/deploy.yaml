@@ -32,12 +32,22 @@ jobs:
             -Dsonar.host.url=$SONAR_HOST_URL \
             -Dsonar.login=$SONAR_TOKEN
 
-      # Step 4: Build Docker image
+      # Step 4: Upload artifact to Nexus
+      - name: Upload JAR to Nexus
+        env:
+          NEXUS_URL: ${{ secrets.NEXUS_URL }}
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+        run: |
+          curl -u $NEXUS_USERNAME:$NEXUS_PASSWORD --upload-file target/*.jar \
+            $NEXUS_URL/repository/maven-releases/com/example/my-app/1.0.0/my-app-1.0.0.jar
+
+      # Step 5: Build Docker image
       - name: Build Docker image
         run: |
           docker build -t my-app:latest .
 
-      # Step 5: Install Trivy and scan the image
+      # Step 6: Install Trivy and scan the image
       - name: Install Trivy
         run: |
           sudo apt-get update && sudo apt-get install -y wget
@@ -48,7 +58,7 @@ jobs:
         run: |
           trivy image --exit-code 1 --severity HIGH,CRITICAL my-app:latest
 
-      # Step 6: Log in to AWS ECR
+      # Step 7: Log in to AWS ECR
       - name: Log in to AWS ECR
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -58,7 +68,7 @@ jobs:
         run: |
           aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_URL
 
-      # Step 7: Tag and push image to ECR
+      # Step 8: Tag and push image to ECR
       - name: Tag and push image to ECR
         env:
           ECR_REPO_URL: ${{ secrets.ECR_REPO_URL }}
@@ -66,7 +76,7 @@ jobs:
           docker tag my-app:latest $ECR_REPO_URL:latest
           docker push $ECR_REPO_URL:latest
 
-      # Step 8: Deploy to Kubernetes via bastion host
+      # Step 9: Deploy to Kubernetes via bastion host
       - name: Deploy to Kubernetes
         env:
           BASTION_HOST: ${{ secrets.BASTION_HOST }}
@@ -74,15 +84,10 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.BASTION_KEY }}
           ECR_REPO_URL: ${{ secrets.ECR_REPO_URL }}
         run: |
-          # Set up SSH key for bastion host
           echo "$SSH_PRIVATE_KEY" > private_key.pem
           chmod 600 private_key.pem
-
-          # Update Kubernetes deployment with new image
           ssh -T -o StrictHostKeyChecking=no -i private_key.pem $BASTION_USER@$BASTION_HOST << 'EOF'
             kubectl set image deployment/my-app my-app=$ECR_REPO_URL:latest --namespace default
             kubectl rollout status deployment/my-app --namespace default
           EOF
-
-          # Clean up
           rm private_key.pem
