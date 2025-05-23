@@ -86,8 +86,23 @@ jobs:
         run: |
           echo "$SSH_PRIVATE_KEY" > private_key.pem
           chmod 600 private_key.pem
-          ssh -T -o StrictHostKeyChecking=no -i private_key.pem $BASTION_USER@$BASTION_HOST << 'EOF'
-            kubectl set image deployment/my-app my-app=$ECR_REPO_URL:latest --namespace default
-            kubectl rollout status deployment/my-app --namespace default
+
+          ssh -i private_key.pem \
+              -o StrictHostKeyChecking=no \
+              -o ServerAliveInterval=30 -o ServerAliveCountMax=5 \
+              $BASTION_USER@$BASTION_HOST << EOF
+            set -e
+            echo "[INFO] Pre-deployment check:"
+            kubectl get pods -n default
+
+            echo "[INFO] Updating image..."
+            kubectl set image deployment/my-app my-app=$ECR_REPO_URL:latest -n default
+
+            echo "[INFO] Waiting for rollout to complete..."
+            kubectl rollout status deployment/my-app -n default --timeout=120s
+
+            echo "[INFO] Post-deployment check:"
+            kubectl get pods -n default
           EOF
+
           rm private_key.pem
