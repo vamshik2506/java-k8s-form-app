@@ -4,10 +4,10 @@ metadata:
   name: my-app-service
   namespace: default
 spec:
+  type: LoadBalancer  # Enables external access and automatic load balancer creation
   selector:
-    app: my-app
+    app: my-app       # Ensure your pods have this label
   ports:
     - protocol: TCP
-      port: 80
-      targetPort: 8080
-  type: ClusterIP
+      port: 80        # Port to expose externally
+      targetPort: 8080  # Port your app listens on inside the pod
