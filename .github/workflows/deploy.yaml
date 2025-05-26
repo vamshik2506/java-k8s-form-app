@@ -58,31 +58,21 @@ jobs:
         run: |
           trivy image --exit-code 1 --severity HIGH,CRITICAL my-app:latest
 
-      # Step 7: Log in to AWS ECR
-      - name: Log in to AWS ECR
+      # Step 7: Tag and push image to Public ECR
+      - name: Tag and push image to Public ECR
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-          ECR_REPO_URL: ${{ secrets.ECR_REPO_URL }}
+          PUBLIC_ECR_URL: ${{ secrets.PUBLIC_ECR_URL }}
         run: |
-          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_URL
+          docker tag my-app:latest $PUBLIC_ECR_URL:latest
+          docker push $PUBLIC_ECR_URL:latest
 
-      # Step 8: Tag and push image to ECR
-      - name: Tag and push image to ECR
-        env:
-          ECR_REPO_URL: ${{ secrets.ECR_REPO_URL }}
-        run: |
-          docker tag my-app:latest $ECR_REPO_URL:latest
-          docker push $ECR_REPO_URL:latest
-
-      # Step 9: Deploy to Kubernetes via Bastion Host
+      # Step 8: Deploy to Kubernetes via Bastion Host
       - name: Deploy to Kubernetes
         env:
           BASTION_HOST: ${{ secrets.BASTION_HOST }}
           BASTION_USER: ${{ secrets.BASTION_USER }}
           SSH_PRIVATE_KEY: ${{ secrets.BASTION_KEY }}
-          ECR_REPO_URL: ${{ secrets.ECR_REPO_URL }}
+          PUBLIC_ECR_URL: ${{ secrets.PUBLIC_ECR_URL }}
         run: |
           echo "$SSH_PRIVATE_KEY" > private_key.pem
           chmod 600 private_key.pem
@@ -95,15 +85,15 @@ jobs:
             kubectl describe pod -l app=my-app -n github-vamshi || true
 
             echo "[INFO] Updating deployment image..."
-            kubectl set image deployment/my-app my-app=$ECR_REPO_URL:latest -n github-vamshi || true
+            kubectl set image deployment/my-app my-app=${{ secrets.PUBLIC_ECR_URL }}:latest -n github-vamshi || true
 
             echo "[INFO] Waiting for rollout to complete..."
             kubectl rollout status deployment/my-app -n github-vamshi --timeout=90s || true
 
             echo "[INFO] Fetching logs from new pods..."
             for pod in $(kubectl get pods -l app=my-app -o jsonpath='{.items[*].metadata.name}' -n github-vamshi); do
-              echo "[LOGS for $pod]"
-              kubectl logs $pod -n github-vamshi || true
+              echo "[LOGS for \$pod]"
+              kubectl logs \$pod -n github-vamshi || true
             done
           EOF
 
