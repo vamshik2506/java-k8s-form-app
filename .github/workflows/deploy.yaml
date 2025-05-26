@@ -14,14 +14,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Set up JDK for Maven build
+      # Step 2: Set up JDK 17 for Maven build
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # Step 3: Build with Maven and SonarQube analysis
+      # Step 3: Build with Maven and run SonarQube analysis
       - name: Build with Maven and SonarQube
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -32,15 +32,16 @@ jobs:
             -Dsonar.host.url=$SONAR_HOST_URL \
             -Dsonar.login=$SONAR_TOKEN
 
-      # Step 4: Upload artifact to Nexus
+      # Step 4: Upload artifact to Nexus Repository
       - name: Upload JAR to Nexus
         env:
           NEXUS_URL: ${{ secrets.NEXUS_URL }}
           NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
           NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
         run: |
-          curl -u $NEXUS_USERNAME:$NEXUS_PASSWORD --upload-file target/*.jar \
-            $NEXUS_URL/repository/maven-releases/com/example/my-app/1.0.0/my-app-1.0.0.jar
+          JAR_FILE=$(ls target/*.jar | head -n 1)
+          curl -u $NEXUS_USERNAME:$NEXUS_PASSWORD --upload-file "$JAR_FILE" \
+            $NEXUS_URL/repository/maven-releases/com/example/my-app/1.0.0/$(basename $JAR_FILE)
 
       # Step 5: Build Docker image
       - name: Build Docker image
@@ -50,11 +51,10 @@ jobs:
       # Step 6: Install Trivy and scan the image
       - name: Install Trivy
         run: |
-          sudo apt-get update && sudo apt-get install -y wget
           wget https://github.com/aquasecurity/trivy/releases/download/v0.52.2/trivy_0.52.2_Linux-64bit.deb
           sudo dpkg -i trivy_0.52.2_Linux-64bit.deb
 
-      - name: Scan image with Trivy
+      - name: Scan Docker image with Trivy
         run: |
           trivy image --exit-code 1 --severity HIGH,CRITICAL my-app:latest
 
@@ -64,11 +64,10 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
-          ECR_REPO_URL: ${{ secrets.ECR_REPO_URL }}
         run: |
-          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_URL
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${{ secrets.ECR_REPO_URL }}
 
-      # Step 8: Tag and push image to ECR
+      # Step 8: Tag and push Docker image to ECR
       - name: Tag and push image to ECR
         env:
           ECR_REPO_URL: ${{ secrets.ECR_REPO_URL }}
@@ -76,8 +75,8 @@ jobs:
           docker tag my-app:latest $ECR_REPO_URL:latest
           docker push $ECR_REPO_URL:latest
 
-      # ✅ Step 9: Deploy to Kubernetes via Bastion Host
-      - name: Deploy to Kubernetes
+      # Step 9: Deploy to Kubernetes via Bastion Host
+      - name: Deploy to Kubernetes Cluster
         env:
           BASTION_HOST: ${{ secrets.BASTION_HOST }}
           BASTION_USER: ${{ secrets.BASTION_USER }}
@@ -87,10 +86,9 @@ jobs:
           echo "$SSH_PRIVATE_KEY" > private_key.pem
           chmod 600 private_key.pem
 
-          ssh -T -o StrictHostKeyChecking=no -i private_key.pem $BASTION_USER@$BASTION_HOST << 'EOF'
+          ssh -T -i private_key.pem -o StrictHostKeyChecking=no $BASTION_USER@$BASTION_HOST << 'EOF'
             echo "[INFO] Checking pre-deployment pod status..."
             kubectl get pods -n github/vamshi
-
 
             echo "[INFO] Describing problematic pods (if any)..."
             kubectl describe pod -l app=my-app -n github/vamshi || true
@@ -98,8 +96,7 @@ jobs:
             echo "[INFO] Updating deployment image..."
             kubectl set image deployment/my-app my-app=$ECR_REPO_URL:latest --namespace github/vamshi
 
-
-            echo "[INFO] Waiting for rollout status..."
+            echo "[INFO] Waiting for rollout to complete..."
             kubectl rollout status deployment/my-app --namespace github/vamshi --timeout=90s || true
 
             echo "[INFO] Fetching logs from new pods..."
@@ -109,4 +106,5 @@ jobs:
             done
           EOF
 
-          rm private_key.pem
+          # Clean up private key securely
+          shred -u private_key.pem
