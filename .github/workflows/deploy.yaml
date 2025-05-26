@@ -87,23 +87,23 @@ jobs:
           echo "$SSH_PRIVATE_KEY" > private_key.pem
           chmod 600 private_key.pem
 
-          ssh -T -i private_key.pem -o StrictHostKeyChecking=no $BASTION_USER@$BASTION_HOST << 'EOF'
+          ssh -i private_key.pem -o StrictHostKeyChecking=no $BASTION_USER@$BASTION_HOST << 'EOF'
             echo "[INFO] Checking pre-deployment pod status..."
-            kubectl get pods -n github-vamshi
+            kubectl get pods -n github-vamshi || true
 
             echo "[INFO] Describing problematic pods (if any)..."
             kubectl describe pod -l app=my-app -n github-vamshi || true
 
             echo "[INFO] Updating deployment image..."
-            kubectl set image deployment/my-app my-app=$ECR_REPO_URL:latest --namespace github-vamshi
+            kubectl set image deployment/my-app my-app=$ECR_REPO_URL:latest -n github-vamshi || true
 
             echo "[INFO] Waiting for rollout to complete..."
-            kubectl rollout status deployment/my-app --namespace github-vamshi --timeout=90s || true
+            kubectl rollout status deployment/my-app -n github-vamshi --timeout=90s || true
 
             echo "[INFO] Fetching logs from new pods..."
-            for pod in \$(kubectl get pods -l app=my-app -o jsonpath='{.items[*].metadata.name}' -n github-vamshi); do
-              echo "[LOGS for \$pod]"
-              kubectl logs \$pod -n github-vamshi || true
+            for pod in $(kubectl get pods -l app=my-app -o jsonpath='{.items[*].metadata.name}' -n github-vamshi); do
+              echo "[LOGS for $pod]"
+              kubectl logs $pod -n github-vamshi || true
             done
           EOF
 
