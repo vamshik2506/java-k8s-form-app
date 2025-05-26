@@ -15,6 +15,6 @@ spec:
     spec:
       containers:
       - name: my-app
-        image: 971901834334.dkr.ecr.eu-north-1.amazonaws.com/github/vamshi:latest
+        image: public.ecr.aws/z7k4r2x1/github-vamshi/my-app
         ports:
         - containerPort: 8080
