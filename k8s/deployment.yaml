@@ -15,6 +15,7 @@ spec:
     spec:
       containers:
       - name: my-app
-        image: public.ecr.aws/z7k4r2x1/github-vamshi/my-app
+        image: public.ecr.aws/z7k4r2x1/github-vamshi/my-app:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8080
