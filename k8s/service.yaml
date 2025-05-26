@@ -2,12 +2,13 @@ apiVersion: v1
 kind: Service
 metadata:
   name: my-app-service
-  namespace: default
+  namespace: github-vamshi
 spec:
-  type: LoadBalancer  # Enables external access and automatic load balancer creation
   selector:
-    app: my-app       # Ensure your pods have this label
+    app: my-app
+  type: NodePort
   ports:
     - protocol: TCP
-      port: 80        # Port to expose externally
-      targetPort: 8080  # Port your app listens on inside the pod
+      port: 8080          # service port
+      targetPort: 8080    # pod container port
+      nodePort: 30080     # port on node to access externally (must be 30000-32767)
