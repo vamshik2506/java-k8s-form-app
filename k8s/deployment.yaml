@@ -3,8 +3,10 @@ kind: Deployment
 metadata:
   name: my-app
   namespace: github-vamshi
+  labels:
+    app: my-app
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: my-app
@@ -15,7 +17,15 @@ spec:
     spec:
       containers:
       - name: my-app
-        image: public.ecr.aws/z7k4r2x1/github-vamshi/my-app:latest
-        imagePullPolicy: Always
+        image: public.ecr.aws/z7k4r2x1/github-vamshi/my-app:latest  # Will be updated by the workflow
         ports:
         - containerPort: 8080
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+
