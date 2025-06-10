@@ -68,7 +68,7 @@ jobs:
 
       # Step 8: Authenticate to Public ECR
       - name: Login to Public ECR
-        run: aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+        run: aws ecr-public get-login-password --region us-east-2 | docker login --username AWS --password-stdin public.ecr.aws
 
       # Step 9: Tag and Push image to Public ECR
       - name: Tag and Push image to Public ECR
