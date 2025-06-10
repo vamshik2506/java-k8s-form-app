@@ -1,120 +1,30 @@
-# .github/workflows/deploy.yaml
-name: CI/CD Pipeline
-
-on:
-  push:
-    branches:
-      - main
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Build with Maven and SonarQube
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        run: |
-          mvn clean package sonar:sonar \
-            -Dsonar.projectKey=my-project \
-            -Dsonar.host.url=$SONAR_HOST_URL \
-            -Dsonar.login=$SONAR_TOKEN
-
-      - name: Upload JAR to Nexus
-        env:
-          NEXUS_URL: ${{ secrets.NEXUS_URL }}
-          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
-          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
-        run: |
-          curl -u $NEXUS_USERNAME:$NEXUS_PASSWORD --upload-file target/*.jar \
-            $NEXUS_URL/repository/maven-releases/com/example/my-app/1.0.0/my-app-1.0.0.jar
-
-      - name: Build Docker image
-        run: |
-          docker build -t my-app:latest .
-
-      - name: Install Trivy
-        run: |
-          sudo apt-get update && sudo apt-get install -y wget
-          wget https://github.com/aquasecurity/trivy/releases/download/v0.52.2/trivy_0.52.2_Linux-64bit.deb
-          sudo dpkg -i trivy_0.52.2_Linux-64bit.deb
-
-      - name: Scan image with Trivy
-        run: |
-          trivy image --exit-code 1 --severity HIGH,CRITICAL my-app:latest
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Login to Public ECR
-        run: aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
-
-      - name: Tag and Push image to Public ECR
-        run: |
-          IMAGE_URI=public.ecr.aws/t3e3b1o4/github-vamshi/my-app
-          docker tag my-app:latest $IMAGE_URI:latest
-          docker push $IMAGE_URI:latest
-
-      - name: Deploy to Kubernetes
-        env:
-          BASTION_HOST: ${{ secrets.BASTION_HOST }}
-          BASTION_USER: ${{ secrets.BASTION_USER }}
-          SSH_PRIVATE_KEY: ${{ secrets.BASTION_KEY }}
-        run: |
-          echo "$SSH_PRIVATE_KEY" > private_key.pem
-          chmod 600 private_key.pem
-
-          ssh -i private_key.pem -o StrictHostKeyChecking=no $BASTION_USER@$BASTION_HOST << 'EOF'
-            echo "[INFO] Checking pre-deployment pod status..."
-            kubectl get pods -n github-vamshi || true
-
-            echo "[INFO] Describing problematic pods (if any)..."
-            kubectl describe pod -l app=my-app -n github-vamshi || true
-
-            echo "[INFO] Updating deployment image..."
-            kubectl set image deployment/my-app my-app=public.ecr.aws/t3e3b1o4/github-vamshi/my-app:latest -n github-vamshi || true
-
-            echo "[INFO] Waiting for rollout to complete..."
-            kubectl rollout status deployment/my-app -n github-vamshi --timeout=90s || true
-
-            echo "[INFO] Fetching logs from new pods..."
-            for pod in $(kubectl get pods -l app=my-app -o jsonpath='{.items[*].metadata.name}' -n github-vamshi); do
-              echo "[LOGS for $pod]"
-              kubectl logs $pod -n github-vamshi || true
-            done
-          EOF
-
-          rm private_key.pem
-
-      - name: Send email notification
-        if: always()
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          from: vamshikrishnak2506@gmail.com
-          to: vamshikrishnak25062000@gmail.com
-          subject: CI/CD Pipeline - ${{ job.status }}
-          body: |
-            The GitHub Actions job **CI/CD Pipeline** has finished with status: **${{ job.status }}**.
-
-            Repository: ${{ github.repository }}
-            Branch: ${{ github.ref_name }}
-            Commit: ${{ github.sha }}
-            Run URL: ${{ github.run_url }}
+# k8s/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+  namespace: github-vamshi
+  labels:
+    app: my-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      containers:
+      - name: my-app
+        image: public.ecr.aws/t3e3b1o4/github-vamshi/my-app:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
