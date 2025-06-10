@@ -1,4 +1,3 @@
-# k8s/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -18,7 +17,7 @@ spec:
     spec:
       containers:
       - name: my-app
-        image: public.ecr.aws/t3e3b1o4/github-vamshi/my-app:latest
+        image: public.ecr.aws/t3e3b1o4/github-vamshi/my-app:latest  # ✅ Correct updated image
         ports:
         - containerPort: 8080
         resources:
