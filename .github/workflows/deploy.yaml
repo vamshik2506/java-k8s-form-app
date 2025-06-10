@@ -64,16 +64,16 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-2  # Public ECR only supports us-east-1
+          aws-region: us-east-1  # ✅ Updated to us-east-1
 
       # Step 8: Authenticate to Public ECR
       - name: Login to Public ECR
-        run: aws ecr-public get-login-password --region us-east-2 | docker login --username AWS --password-stdin public.ecr.aws
+        run: aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
 
       # Step 9: Tag and Push image to Public ECR
       - name: Tag and Push image to Public ECR
         run: |
-          IMAGE_URI=public.ecr.aws/z7k4r2x1/github-vamshi/my-app
+          IMAGE_URI=public.ecr.aws/t3e3b1o4/github-vamshi/my-app
           docker tag my-app:latest $IMAGE_URI:latest
           docker push $IMAGE_URI:latest
 
@@ -95,7 +95,7 @@ jobs:
             kubectl describe pod -l app=my-app -n github-vamshi || true
 
             echo "[INFO] Updating deployment image..."
-            kubectl set image deployment/my-app my-app=public.ecr.aws/z7k4r2x1/github-vamshi/my-app:latest -n github-vamshi || true
+            kubectl set image deployment/my-app my-app=public.ecr.aws/t3e3b1o4/github-vamshi/my-app:latest -n github-vamshi || true
 
             echo "[INFO] Waiting for rollout to complete..."
             kubectl rollout status deployment/my-app -n github-vamshi --timeout=90s || true
@@ -116,8 +116,8 @@ jobs:
         with:
           server_address: smtp.gmail.com
           server_port: 587
-          username: ${{ secrets.SMTP_USERNAME }}         # your gmail address e.g. vamshikrishnak2506@gmail.com
-          password: ${{ secrets.SMTP_PASSWORD }}         # your Gmail App Password
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
           from: vamshikrishnak2506@gmail.com
           to: vamshikrishnak25062000@gmail.com
           subject: CI/CD Pipeline - ${{ job.status }}
@@ -128,4 +128,3 @@ jobs:
             Branch: ${{ github.ref_name }}
             Commit: ${{ github.sha }}
             Run URL: ${{ github.run_url }}
-            
