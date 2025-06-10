@@ -3,16 +3,12 @@ kind: Service
 metadata:
   name: my-app-service
   namespace: github-vamshi
-  annotations:
-    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"    # Use AWS Network Load Balancer
 spec:
   selector:
     app: my-app
-  type: LoadBalancer
   ports:
     - protocol: TCP
-      port: 80          # Externally exposed port (NLB listener port)
-      targetPort: 8080  # Container port in the pod
-
-
-
+      port: 80
+      targetPort: 8080
+      nodePort: 30515
+  type: NodePort
